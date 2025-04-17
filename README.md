@@ -1,2 +1,1 @@
-# tidb-topology-plot-1
-A tool to generate a topology plot based on a TiDB cluster topology file
+This repository is empty. Any task executed on it should be considered a new capability and needs to be created.
