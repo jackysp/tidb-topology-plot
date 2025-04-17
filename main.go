@@ -87,6 +87,16 @@ func generateDot(cluster spec.Specification) error {
 	}
 
 	var b strings.Builder
+	// shapes for each component type
+	shapeMap := map[string]string{
+		"PD":           "circle",
+		"TiKV":         "box",
+		"TiDB":         "ellipse",
+		"Prometheus":   "diamond",
+		"Grafana":      "octagon",
+		"Alertmanager": "hexagon",
+	}
+
 	b.WriteString("digraph topology {\n")
 	b.WriteString("  compound=true;\n")
 	b.WriteString("  rankdir=TB;\n")
@@ -104,6 +114,8 @@ func generateDot(cluster spec.Specification) error {
 				prev := fmt.Sprintf("%s_%s_%d", host, groups[host][j-1], j-1)
 				b.WriteString(fmt.Sprintf("    \"%s\" -> \"%s\" [style=invis, constraint=true];\n", prev, node))
 			}
+			shape := shapeMap[c]
+			b.WriteString(fmt.Sprintf("    \"%s\" [label=\"%s\" shape=\"%s\"];\n", node, c, shape))
 		}
 		b.WriteString("  }\n\n")
 	}
