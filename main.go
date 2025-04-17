@@ -51,12 +51,13 @@ func generateSvg() error {
 func generateDot(cluster spec.Specification) error {
 	// build component groups by host dynamically
 	groups := make(map[string][]string)
+	// group each instance by host and include port in key (e.g., "tidb:4000")
 	for _, comp := range cluster.ComponentsByStartOrder() {
 		for _, inst := range comp.Instances() {
 			host := inst.GetHost()
-			// use component name (lowercase) for grouping
 			name := comp.Name()
-			groups[host] = append(groups[host], name)
+			port := inst.GetMainPort()
+			groups[host] = append(groups[host], fmt.Sprintf("%s:%d", name, port))
 		}
 	}
 	// sort hosts
@@ -92,19 +93,22 @@ func generateDot(cluster spec.Specification) error {
 		b.WriteString(fmt.Sprintf("    label=\"%s\";\n", host))
 		// define component nodes with unique IDs and stack vertically
 		for j, c := range groups[host] {
-			node := fmt.Sprintf("%s_%s_%d", host, c, j)
-			// label with title case
-			label := strings.Title(c)
-			// determine shape
-			shape, ok := shapeMap[c]
+			// c format: "component:port"
+			id := fmt.Sprintf("%s_%s_%d", host, strings.ReplaceAll(c, ":", "_"), j)
+			parts := strings.SplitN(c, ":", 2)
+			compName := parts[0]
+			portStr := parts[1]
+			label := fmt.Sprintf("%s:%s", strings.Title(compName), portStr)
+			// lookup shape by component name
+			shape, ok := shapeMap[compName]
 			if !ok {
 				shape = "box"
 			}
-			b.WriteString(fmt.Sprintf("    \"%s\" [label=\"%s\" shape=\"%s\"];\n", node, label, shape))
-			// add invisible edge to stack nodes vertically
+			b.WriteString(fmt.Sprintf("    \"%s\" [label=\"%s\" shape=\"%s\"];\n", id, label, shape))
+			// stack nodes vertically with invisible edges
 			if j > 0 {
-				prev := fmt.Sprintf("%s_%s_%d", host, groups[host][j-1], j-1)
-				b.WriteString(fmt.Sprintf("    \"%s\" -> \"%s\" [style=invis, constraint=true];\n", prev, node))
+				prevId := fmt.Sprintf("%s_%s_%d", host, strings.ReplaceAll(groups[host][j-1], ":", "_"), j-1)
+				b.WriteString(fmt.Sprintf("    \"%s\" -> \"%s\" [style=invis, constraint=true];\n", prevId, id))
 			}
 		}
 		b.WriteString("  }\n\n")
