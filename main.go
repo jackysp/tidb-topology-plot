@@ -1,23 +1,22 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"net"
 	"os"
+	"os/exec"
+	"sort"
+	"strings"
 
-	"gopkg.in/yaml.v2"
-	"gonum.org/v1/gonum/graph"
-	"gonum.org/v1/gonum/graph/simple"
-	"gonum.org/v1/plot"
-	"gonum.org/v1/plot/plotter"
-	"gonum.org/v1/plot/vg"
 	"github.com/pingcap/tiup/pkg/cluster/spec"
+	"gopkg.in/yaml.v2"
 )
 
 func main() {
 	// Read the YAML file
-	yamlFile, err := ioutil.ReadFile("poc-cluster-config.yaml.txt")
+	yamlFile, err := os.ReadFile("poc-cluster-config.yaml")
 	if err != nil {
 		log.Fatalf("Error reading YAML file: %v", err)
 	}
@@ -29,80 +28,111 @@ func main() {
 		log.Fatalf("Error parsing YAML file: %v", err)
 	}
 
-	// Create a new graph
-	g := simple.NewDirectedGraph()
-
-	// Add nodes to the graph
-	addNodesToGraph(g, cluster)
-
-	// Create a plot
-	p, err := plot.New()
-	if err != nil {
-		log.Fatalf("Error creating plot: %v", err)
+	// Generate DOT topology file
+	if err := generateDot(cluster); err != nil {
+		log.Fatalf("Error generating DOT topology: %v", err)
 	}
+	fmt.Println("DOT topology saved as topology.dot")
 
-	// Add the graph to the plot
-	err = addGraphToPlot(p, g)
-	if err != nil {
-		log.Fatalf("Error adding graph to plot: %v", err)
+	// Render SVG from DOT file
+	if err := generateSvg(); err != nil {
+		log.Fatalf("Error generating SVG topology: %v", err)
 	}
-
-	// Save the plot as an SVG file
-	err = p.Save(10*vg.Inch, 10*vg.Inch, "topology.svg")
-	if err != nil {
-		log.Fatalf("Error saving plot: %v", err)
-	}
-
-	fmt.Println("Topology plot saved as topology.svg")
+	fmt.Println("SVG topology saved as topology.svg")
 }
 
-func addNodesToGraph(g *simple.DirectedGraph, cluster spec.Specification) {
-	// Add PD nodes
+// generateSvg executes Graphviz dot to produce SVG output
+func generateSvg() error {
+	cmd := exec.Command("dot", "-Tsvg", "topology.dot", "-o", "topology.svg")
+	return cmd.Run()
+}
+
+// generateDot creates a Graphviz DOT topology grouping components by host
+func generateDot(cluster spec.Specification) error {
+	// build component groups by host
+	groups := make(map[string][]string)
 	for _, pd := range cluster.PDServers {
-		node := g.NewNode()
-		g.AddNode(node)
+		groups[pd.Host] = append(groups[pd.Host], "PD")
 	}
-
-	// Add TiKV nodes
 	for _, tikv := range cluster.TiKVServers {
-		node := g.NewNode()
-		g.AddNode(node)
+		groups[tikv.Host] = append(groups[tikv.Host], "TiKV")
 	}
-
-	// Add TiDB nodes
 	for _, tidb := range cluster.TiDBServers {
-		node := g.NewNode()
-		g.AddNode(node)
+		groups[tidb.Host] = append(groups[tidb.Host], "TiDB")
+	}
+	if cluster.Monitors != nil {
+		for _, m := range cluster.Monitors {
+			groups[m.Host] = append(groups[m.Host], "Prometheus")
+		}
+	}
+	if cluster.Grafanas != nil {
+		for _, g := range cluster.Grafanas {
+			groups[g.Host] = append(groups[g.Host], "Grafana")
+		}
+	}
+	if cluster.Alertmanagers != nil {
+		for _, a := range cluster.Alertmanagers {
+			groups[a.Host] = append(groups[a.Host], "Alertmanager")
+		}
+	}
+	// sort hosts
+	hosts := make([]string, 0, len(groups))
+	for h := range groups {
+		hosts = append(hosts, h)
+	}
+	sortHosts(hosts)
+	// sort component nodes within each host alphabetically
+	for _, host := range hosts {
+		sort.Strings(groups[host])
 	}
 
-	// Add Prometheus nodes
-	for _, prometheus := range cluster.PrometheusServers {
-		node := g.NewNode()
-		g.AddNode(node)
+	var b strings.Builder
+	b.WriteString("digraph topology {\n")
+	b.WriteString("  compound=true;\n")
+	b.WriteString("  rankdir=TB;\n")
+	b.WriteString("  nodesep=0.5;\n")
+	b.WriteString("  ranksep=0.5;\n\n")
+	// create cluster for each host
+	for i, host := range hosts {
+		b.WriteString(fmt.Sprintf("  subgraph cluster_%d {\n", i))
+		b.WriteString(fmt.Sprintf("    label=\"%s\";\n", host))
+		// define component nodes with unique IDs and stack vertically
+		for j, c := range groups[host] {
+			node := fmt.Sprintf("%s_%s_%d", host, c, j)
+			b.WriteString(fmt.Sprintf("    \"%s\" [label=\"%s\"];\n", node, c))
+			if j > 0 {
+				prev := fmt.Sprintf("%s_%s_%d", host, groups[host][j-1], j-1)
+				b.WriteString(fmt.Sprintf("    \"%s\" -> \"%s\" [style=invis, constraint=true];\n", prev, node))
+			}
+		}
+		// add invisible dummy node for vertical alignment
+		b.WriteString(fmt.Sprintf("    dummy_%d [label=\"\", shape=point, style=invis];\n", i))
+		b.WriteString("  }\n\n")
 	}
 
-	// Add Grafana nodes
-	for _, grafana := range cluster.GrafanaServers {
-		node := g.NewNode()
-		g.AddNode(node)
-	}
+	b.WriteString("\n")
 
-	// Add Alertmanager nodes
-	for _, alertmanager := range cluster.AlertmanagerServers {
-		node := g.NewNode()
-		g.AddNode(node)
-	}
+	b.WriteString("}")
+	return os.WriteFile("topology.dot", []byte(b.String()), 0644)
 }
 
-func addGraphToPlot(p *plot.Plot, g *simple.DirectedGraph) error {
-	// Create a new graph plotter
-	graphPlotter, err := plotter.NewGraph(g)
-	if err != nil {
-		return err
-	}
-
-	// Add the graph plotter to the plot
-	p.Add(graphPlotter)
-
-	return nil
+// sortHosts sorts host strings by numeric IP order if possible, fallback to lexical
+func sortHosts(hosts []string) {
+	sort.Slice(hosts, func(i, j int) bool {
+		h1, _, e1 := net.SplitHostPort(hosts[i])
+		if e1 != nil {
+			h1 = hosts[i]
+		}
+		h2, _, e2 := net.SplitHostPort(hosts[j])
+		if e2 != nil {
+			h2 = hosts[j]
+		}
+		ip1, ip2 := net.ParseIP(h1), net.ParseIP(h2)
+		if ip1 != nil && ip2 != nil {
+			if cmp := bytes.Compare(ip1, ip2); cmp != 0 {
+				return cmp < 0
+			}
+		}
+		return hosts[i] < hosts[j]
+	})
 }
