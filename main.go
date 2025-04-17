@@ -15,17 +15,23 @@ import (
 )
 
 func main() {
+	// parse input arguments
+	if len(os.Args) < 2 {
+		fmt.Fprintf(os.Stderr, "Usage: %s <config.yaml>\n", os.Args[0])
+		os.Exit(1)
+	}
+	configPath := os.Args[1]
 	// Read the YAML file
-	yamlFile, err := os.ReadFile("poc-cluster-config.yaml")
+	yamlFile, err := os.ReadFile(configPath)
 	if err != nil {
-		log.Fatalf("Error reading YAML file: %v", err)
+		log.Fatalf("Error reading config file %s: %v", configPath, err)
 	}
 
 	// Parse the YAML file
 	var cluster spec.Specification
 	err = yaml.Unmarshal(yamlFile, &cluster)
 	if err != nil {
-		log.Fatalf("Error parsing YAML file: %v", err)
+		log.Fatalf("Error parsing config file %s: %v", configPath, err)
 	}
 
 	// Generate DOT topology file
