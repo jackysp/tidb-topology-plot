@@ -49,30 +49,14 @@ func generateSvg() error {
 
 // generateDot creates a Graphviz DOT topology grouping components by host
 func generateDot(cluster spec.Specification) error {
-	// build component groups by host
+	// build component groups by host dynamically
 	groups := make(map[string][]string)
-	for _, pd := range cluster.PDServers {
-		groups[pd.Host] = append(groups[pd.Host], "PD")
-	}
-	for _, tikv := range cluster.TiKVServers {
-		groups[tikv.Host] = append(groups[tikv.Host], "TiKV")
-	}
-	for _, tidb := range cluster.TiDBServers {
-		groups[tidb.Host] = append(groups[tidb.Host], "TiDB")
-	}
-	if cluster.Monitors != nil {
-		for _, m := range cluster.Monitors {
-			groups[m.Host] = append(groups[m.Host], "Prometheus")
-		}
-	}
-	if cluster.Grafanas != nil {
-		for _, g := range cluster.Grafanas {
-			groups[g.Host] = append(groups[g.Host], "Grafana")
-		}
-	}
-	if cluster.Alertmanagers != nil {
-		for _, a := range cluster.Alertmanagers {
-			groups[a.Host] = append(groups[a.Host], "Alertmanager")
+	for _, comp := range cluster.ComponentsByStartOrder() {
+		for _, inst := range comp.Instances() {
+			host := inst.GetHost()
+			// use component name (lowercase) for grouping
+			name := comp.Name()
+			groups[host] = append(groups[host], name)
 		}
 	}
 	// sort hosts
@@ -89,12 +73,12 @@ func generateDot(cluster spec.Specification) error {
 	var b strings.Builder
 	// shapes for each component type
 	shapeMap := map[string]string{
-		"PD":           "circle",
-		"TiKV":         "box",
-		"TiDB":         "ellipse",
-		"Prometheus":   "diamond",
-		"Grafana":      "octagon",
-		"Alertmanager": "hexagon",
+		"pd":           "circle",
+		"tikv":         "box",
+		"tidb":         "ellipse",
+		"prometheus":   "diamond",
+		"grafana":      "octagon",
+		"alertmanager": "hexagon",
 	}
 
 	b.WriteString("digraph topology {\n")
@@ -109,13 +93,19 @@ func generateDot(cluster spec.Specification) error {
 		// define component nodes with unique IDs and stack vertically
 		for j, c := range groups[host] {
 			node := fmt.Sprintf("%s_%s_%d", host, c, j)
-			b.WriteString(fmt.Sprintf("    \"%s\" [label=\"%s\"];\n", node, c))
+			// label with title case
+			label := strings.Title(c)
+			// determine shape
+			shape, ok := shapeMap[c]
+			if !ok {
+				shape = "box"
+			}
+			b.WriteString(fmt.Sprintf("    \"%s\" [label=\"%s\" shape=\"%s\"];\n", node, label, shape))
+			// add invisible edge to stack nodes vertically
 			if j > 0 {
 				prev := fmt.Sprintf("%s_%s_%d", host, groups[host][j-1], j-1)
 				b.WriteString(fmt.Sprintf("    \"%s\" -> \"%s\" [style=invis, constraint=true];\n", prev, node))
 			}
-			shape := shapeMap[c]
-			b.WriteString(fmt.Sprintf("    \"%s\" [label=\"%s\" shape=\"%s\"];\n", node, c, shape))
 		}
 		b.WriteString("  }\n\n")
 	}
