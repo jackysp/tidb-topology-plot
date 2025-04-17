@@ -105,8 +105,6 @@ func generateDot(cluster spec.Specification) error {
 				b.WriteString(fmt.Sprintf("    \"%s\" -> \"%s\" [style=invis, constraint=true];\n", prev, node))
 			}
 		}
-		// add invisible dummy node for vertical alignment
-		b.WriteString(fmt.Sprintf("    dummy_%d [label=\"\", shape=point, style=invis];\n", i))
 		b.WriteString("  }\n\n")
 	}
 
