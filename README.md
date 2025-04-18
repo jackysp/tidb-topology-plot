@@ -27,7 +27,7 @@ go build -o topology-plot main.go
 Provide your YAML file as the first argument. For example:
 
 ```sh
-./topology-plot poc-cluster-config.yaml
+./topology-plot config.yaml
 ```
 
 This will generate:
@@ -37,12 +37,20 @@ This will generate:
 
 ## Example
 
-```sh
-go run main.go poc-cluster-config.yaml
-```
+- Export your cluster topology to YAML:
+
+  ```sh
+  tiup cluster show-config cluster1 > config.yaml
+  ```
+
+- Generate the topology plot:
+
+  ```sh
+  ./topology-plot config.yaml
+  ```
 
 After running, open `topology.svg` in your browser or image viewer to see the cluster layout.
 
 ## Configuration Format
 
-See `poc-cluster-config.yaml` for an example of the YAML schema, which follows the TiUP specification for TiDB cluster topology.
+See `config.yaml` for an example of the YAML schema, which follows the TiUP specification for TiDB cluster topology.

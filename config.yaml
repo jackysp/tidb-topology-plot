@@ -1,0 +1,82 @@
+global:
+  user: tidb
+  ssh_port: 22
+  ssh_type: builtin
+  deploy_dir: /tidb-deploy
+  data_dir: /tidb-data
+  os: linux
+  systemd_mode: system
+monitored:
+  node_exporter_port: 9100
+  blackbox_exporter_port: 9115
+  deploy_dir: /tidb-deploy/monitor-9100
+  data_dir: /tidb-data/monitor-9100
+  log_dir: /tidb-deploy/monitor-9100/log
+server_configs:
+  tidb: {}
+  tikv: {}
+  pd: {}
+  tso: {}
+  scheduling: {}
+  tidb_dashboard: {}
+  tiflash: {}
+  tiproxy:
+    balance.policy: connection
+  tiflash-learner: {}
+  pump: {}
+  drainer: {}
+  cdc: {}
+  kvcdc: {}
+  grafana: {}
+tidb_servers:
+- host: 10.148.0.5
+  ssh_port: 22
+  port: 4000
+  status_port: 10080
+  deploy_dir: /tidb-deploy/tidb-4000
+  log_dir: /tidb-deploy/tidb-4000/log
+  arch: amd64
+  os: linux
+tikv_servers:
+- host: 10.148.0.5
+  ssh_port: 22
+  port: 20160
+  status_port: 20180
+  deploy_dir: /tidb-deploy/tikv-20160
+  data_dir: /tidb-data/tikv-20160
+  log_dir: /tidb-deploy/tikv-20160/log
+  arch: amd64
+  os: linux
+tiflash_servers: []
+tiproxy_servers:
+- host: 10.148.0.5
+  ssh_port: 22
+  port: 6000
+  status_port: 3080
+  deploy_dir: /tidb-deploy/tiproxy-6000
+  arch: amd64
+  os: linux
+pd_servers:
+- host: 10.148.0.5
+  ssh_port: 22
+  name: pd1
+  client_port: 2379
+  peer_port: 2380
+  deploy_dir: /tidb-deploy/pd-2379
+  data_dir: /tidb-data/pd-2379
+  log_dir: /tidb-deploy/pd-2379/log
+  arch: amd64
+  os: linux
+cdc_servers:
+- host: 10.148.0.5
+  ssh_port: 22
+  port: 8300
+  deploy_dir: /tidb-deploy/cdc-8300
+  data_dir: /tidb-data/cdc-8300
+  log_dir: /tidb-deploy/cdc-8300/log
+  gc-ttl: 86400
+  tz: Asia/Shanghai
+  ticdc_cluster_id: ""
+  arch: amd64
+  os: linux
+monitoring_servers: []
